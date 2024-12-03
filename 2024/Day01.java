@@ -13,7 +13,7 @@ public class Day01 {
 
 		// Import the data; will throw if no file or data makes no sense.
 		FileParser.DoubleIntegerListParser fp = new FileParser.DoubleIntegerListParser(DAY_NUM, SAMPLE_INPUT);
-       	fp.parse();
+	       	fp.parse();
 
 		// Sort list 1.
 		List<Integer> list1 = fp.getList1();

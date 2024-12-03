@@ -73,7 +73,7 @@ public abstract class FileParser {
 			return m_line;
 		}
 
-		public int getNextInteger() {
+		public Integer getNextInteger() {
 			int slen = m_line.length();
 
 			// Skip all whitespace before the intger. 
@@ -94,8 +94,9 @@ public abstract class FileParser {
 			int endIntPos = m_currPos;
 
 			if (endIntPos <= startIntPos) {
-				throw new IllegalArgumentException(
-					String.format("next integer not found in string \"%s\" from pos %d", m_line, m_currPos));
+				//throw new IllegalArgumentException(
+				//	String.format("next integer not found in string \"%s\" from pos %d", m_line, m_currPos));
+				return null;
 			}
 
 			return Integer.parseInt(m_line.substring(startIntPos, endIntPos));
@@ -131,6 +132,37 @@ public abstract class FileParser {
 				System.out.format("line %d ints=%d,%d\n",
 					lineNum, firstInt, secondInt);
 			}
+		}
+    }
+
+
+	/*
+	*/
+    public static class ListIntegerListParser extends FileParser {
+        protected final List<List<Integer>> m_list;
+ 
+        public ListIntegerListParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_list = new ArrayList<List<Integer>>();
+		}
+
+		public List<List<Integer>> getList() { return m_list; }
+
+		public void parse() throws IOException {
+			int lineNum = 0;
+			for (InternalReaderIterator iter = getFileIterator() ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				List<Integer> builder = new ArrayList<Integer>();
+
+				Integer nextInt = null;
+				while ((nextInt = iter.getNextInteger()) != null) {
+					builder.add(nextInt);
+				}
+
+				m_list.add(builder);
+				System.out.format("line %d ints=%s\n", lineNum, builder);
+			}
+			System.out.format("finished parsing %d lines\n\n", lineNum);
 		}
     }
 }
