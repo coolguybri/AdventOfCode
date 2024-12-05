@@ -189,6 +189,19 @@ public abstract class FileParser {
 			System.out.format("finished reading %d lines\n\n", lineNum);
 		}
 	}
+
+	/*
+	*/
+	public static class MatrixParser extends LineParser {
+ 
+		public MatrixParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+		}
+
+		public char getCell(int x, int y) { return m_list.get(y).charAt(x); }
+		public int getHeight() { return m_list.size(); }
+		public int getWidth() { return m_list.get(0).length(); }	
+	}
 }
 
 
