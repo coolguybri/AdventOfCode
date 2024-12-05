@@ -101,16 +101,16 @@ public abstract class FileParser {
 
 			return Integer.parseInt(m_line.substring(startIntPos, endIntPos));
 		}
-    }
+	}
 
 
 	/*
 	*/
-    public static class DoubleIntegerListParser extends FileParser {
-        protected final List<Integer> m_list1;
-        protected final List<Integer> m_list2;
+	public static class DoubleIntegerListParser extends FileParser {
+        	protected final List<Integer> m_list1;
+        	protected final List<Integer> m_list2;
  
-        public DoubleIntegerListParser(int dayNum, boolean sample) throws IOException {
+        	public DoubleIntegerListParser(int dayNum, boolean sample) throws IOException {
 			super(dayNum, sample);
 			m_list1 = new ArrayList<Integer>();
 			m_list2 = new ArrayList<Integer>();
@@ -133,15 +133,15 @@ public abstract class FileParser {
 					lineNum, firstInt, secondInt);
 			}
 		}
-    }
+	}
 
 
 	/*
 	*/
-    public static class ListIntegerListParser extends FileParser {
-        protected final List<List<Integer>> m_list;
- 
-        public ListIntegerListParser(int dayNum, boolean sample) throws IOException {
+	public static class ListIntegerListParser extends FileParser {
+        	protected final List<List<Integer>> m_list;
+
+   		public ListIntegerListParser(int dayNum, boolean sample) throws IOException {
 			super(dayNum, sample);
 			m_list = new ArrayList<List<Integer>>();
 		}
@@ -164,7 +164,31 @@ public abstract class FileParser {
 			}
 			System.out.format("finished parsing %d lines\n\n", lineNum);
 		}
-    }
+	}
+
+
+	/*
+	*/
+	 public static class LineParser extends FileParser {
+		protected final List<String> m_list;
+ 
+		public LineParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_list = new ArrayList<String>();
+		}
+
+		public List<String> getList() { return m_list; }
+
+		public void parse() throws IOException {
+			int lineNum = 0;
+			for (InternalReaderIterator iter = getFileIterator() ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				m_list.add(line);
+				System.out.format("line %02d: %s\n", lineNum, line);
+			}
+			System.out.format("finished reading %d lines\n\n", lineNum);
+		}
+	}
 }
 
 
