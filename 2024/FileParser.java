@@ -10,6 +10,7 @@ public abstract class FileParser {
 	protected String 				m_line;
 	protected int 					m_lineNum;
 	protected int					m_currPos;
+	protected boolean				m_skipBlank;
 
 	public FileParser(int dayNum, boolean sample) throws IOException {
 		m_filename = String.format("input/day%02d.%s", dayNum, sample ? "sample" : "input");
@@ -20,6 +21,7 @@ public abstract class FileParser {
 		m_line = null;
 		m_lineNum = 0;
 		m_currPos = 0;
+		m_skipBlank = true;
 	}
 
 	public InternalReaderIterator getFileIterator() {
@@ -44,17 +46,22 @@ public abstract class FileParser {
 					m_line = null;
 				}
 
-				if (m_line == null) 
+				if (m_line == null) {
+					System.out.format("breaking out with null line on %d\n", m_lineNum);
 					break;
+				}
 
 				m_lineNum++;
 				m_currPos = 0;
+				m_line = m_line.trim();
 
 				// Skip blank lines.
-				m_line = m_line.trim();
-				if (m_line.length() > 0)
+				if (!m_skipBlank || (m_line.length() > 0)) {
+					//System.out.format("breaking out with line len=%d, skip=%b on %d\n", m_line.length(), m_skipBlank, m_lineNum);
 					break;
-            	}
+				}
+			}
+
 			m_nextCached = true;
 		}
 
@@ -201,6 +208,79 @@ public abstract class FileParser {
 		public char getCell(int x, int y) { return m_list.get(y).charAt(x); }
 		public int getHeight() { return m_list.size(); }
 		public int getWidth() { return m_list.get(0).length(); }	
+	}
+
+	/*
+	*/
+	public static class PageRuleParser extends FileParser {
+
+		public static class PageRule {
+			public final int before;
+			public final int after;
+
+			public PageRule (int b, int a) {
+				before = b;
+				after = a;
+			}
+
+			public String toString() {
+				return String.format("[b:%d,a:%d]", before, after);
+			}
+		}
+	
+		protected final List<PageRule> m_rules;
+		protected final List<List<Integer>> m_updates;
+ 
+		public PageRuleParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_skipBlank = false;
+			m_rules = new ArrayList<PageRule>();
+			m_updates = new ArrayList<List<Integer>>();
+			System.out.format("page rule parser init\n");
+		}
+
+		public List<PageRule> getRules() { return m_rules; }
+		public List<List<Integer>> getUpdates() { return m_updates; }
+
+		public void parse() throws IOException {
+
+			System.out.format("rule line parse\n");
+
+			// First section: rule list.
+			int lineNum = 0;
+			InternalReaderIterator iter = getFileIterator();
+			for ( ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				System.out.format("rule line %02d: \"%s\" (%d)\n", lineNum, line, line.length());
+				if (line.isEmpty()) {
+					System.out.format("rule section complete\n");
+					break;
+				}
+
+				int before = iter.getNextInteger();
+				int after = iter.getNextInteger();
+				PageRule pr = new PageRule(before, after);
+				m_rules.add(pr);
+				System.out.format("rule line %02d: %s\n", lineNum, pr);
+			}
+
+			// Next section: orders.
+			for ( ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				System.out.format("order line %02d: \"%s\" (%d)\n", lineNum, line, line.length());
+				List<Integer> builder = new ArrayList<Integer>();
+
+				Integer nextInt = null;
+				while ((nextInt = iter.getNextInteger()) != null) {
+					builder.add(nextInt);
+				}
+
+				m_updates.add(builder);
+				System.out.format("order line %02d: %s\n", lineNum, builder);
+			}
+
+			System.out.format("finished reading %d lines\n\n", lineNum);
+		}
 	}
 }
 
