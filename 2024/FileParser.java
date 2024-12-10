@@ -108,6 +108,35 @@ public abstract class FileParser {
 
 			return Integer.parseInt(m_line.substring(startIntPos, endIntPos));
 		}
+
+		public Long getNextLong() {
+			int slen = m_line.length();
+
+			// Skip all whitespace before the intger. 
+			for (; m_currPos < slen ; m_currPos++) {
+				char c = m_line.charAt(m_currPos);
+				if (Character.isDigit(c)) {
+					break;
+				}
+			}
+
+			int startIntPos = m_currPos;
+			for (; m_currPos < slen ; m_currPos++) {
+				char c = m_line.charAt(m_currPos);
+				if (!Character.isDigit(c)) {
+					break;
+				}
+			}
+			int endIntPos = m_currPos;
+
+			if (endIntPos <= startIntPos) {
+				//throw new IllegalArgumentException(
+				//	String.format("next integer not found in string \"%s\" from pos %d", m_line, m_currPos));
+				return null;
+			}
+
+			return Long.parseLong(m_line.substring(startIntPos, endIntPos));
+		}
 	}
 
 
@@ -142,6 +171,36 @@ public abstract class FileParser {
 		}
 	}
 
+
+	/*
+	*/
+	public static class ListLongListParser extends FileParser {
+        	protected final List<List<Long>> m_list;
+
+   		public ListLongListParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_list = new ArrayList<List<Long>>();
+		}
+
+		public List<List<Long>> getList() { return m_list; }
+
+		public void parse() throws IOException {
+			int lineNum = 0;
+			for (InternalReaderIterator iter = getFileIterator() ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				List<Long> builder = new ArrayList<Long>();
+
+				Long nextInt = null;
+				while ((nextInt = iter.getNextLong()) != null) {
+					builder.add(nextInt);
+				}
+
+				m_list.add(builder);
+				System.out.format("line %d ints=%s\n", lineNum, builder);
+			}
+			System.out.format("finished parsing %d lines\n\n", lineNum);
+		}
+	}
 
 	/*
 	*/
