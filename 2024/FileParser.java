@@ -257,6 +257,110 @@ public abstract class FileParser {
 	}
 
 	/*
+        */	
+ 	public static class Pos {
+                public final int x;
+                public final int y;
+                public Pos(int x, int y) {
+                        this.x = x;
+                        this.y = y;
+                }
+
+		@Override
+                public String toString() {
+                        return String.format("(%d,%d)", x, y);
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                        if (this == o) return true;
+                        if (o == null || getClass() != o.getClass()) return false;
+                        Pos that = (Pos) o;
+                        return (this.x == that.x) && (this.y == that.y);
+                }
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(x, y);
+		}
+
+		public Pos left() {
+			return new Pos(x-1, y);
+		}
+		public Pos right() {
+			return new Pos(x+1, y);
+		}
+		public Pos up() {
+			return new Pos(x, y-1);
+		}
+		public Pos down() {
+			return new Pos(x, y+1);
+                }
+        }
+
+
+	/*
+	*/
+	public static class ClawParser extends FileParser {
+
+		private static int nextid = 0;
+	
+		public static class ClawMachine {
+			public final int id;
+			public final Pos a;
+			public final Pos b;
+			public final Pos prize;	
+
+			public ClawMachine(Pos a, Pos b, Pos p) {
+				this.id = nextid++;
+				this.a = a;
+				this.b = b;
+				this.prize = p;
+			}
+
+			@Override
+			public String toString() {
+				return String.format("[claw [%03d] a=%s, b=%s, prize=%s]", id, a, b, prize);
+			}
+		}
+
+		protected final List<ClawMachine> m_list;
+ 
+		public ClawParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_list = new ArrayList<ClawMachine>();
+		}
+
+		public List<ClawMachine> getList() { return m_list; }
+
+		// Button A: X+94, Y+34
+		// Button B: X+22, Y+67
+		// Prize: X=8400, Y=5400
+		private Pos parseLine(String line) {
+			int fbpos = line.indexOf('X') + 2;
+			int fepos = line.indexOf(',');
+			int x = Integer.parseInt(line.substring(fbpos, fepos));
+			int sbpos = line.indexOf('Y') + 2;
+			int y = Integer.parseInt(line.substring(sbpos));
+			return new Pos(x, y);
+		}
+
+		public void parse() throws IOException {
+			int recNum = 0;
+			for (InternalReaderIterator iter = getFileIterator() ; iter.hasNext() ; recNum++) {
+				Pos a = parseLine(iter.next());	
+				Pos b = parseLine(iter.next());	
+				Pos prize = parseLine(iter.next());
+				ClawMachine m = new ClawMachine(a, b, prize);
+
+				System.out.format("machine %02d: %s\n", recNum, m);
+				m_list.add(m);
+			}
+			System.out.format("finished reading %d records\n\n", recNum);
+		}
+	}
+
+	/*
 	*/
 	public static class MatrixParser extends LineParser {
  
