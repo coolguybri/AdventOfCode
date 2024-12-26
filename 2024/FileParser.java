@@ -298,7 +298,6 @@ public abstract class FileParser {
                 }
         }
 
-
 	/*
 	*/
 	public static class ClawParser extends FileParser {
@@ -357,6 +356,65 @@ public abstract class FileParser {
 				m_list.add(m);
 			}
 			System.out.format("finished reading %d records\n\n", recNum);
+		}
+	}
+
+	/*
+	*/
+	public static class RobotParser extends FileParser {
+
+		private static int nextid = 0;
+	
+		public static class Robot {
+			public final int id;
+			public final Pos initial;
+			public final Pos velocity;
+			public Pos currPos;
+
+			public Robot(Pos i, Pos v) {
+				this.id = nextid++;
+				this.initial = i;
+				this.velocity = v;
+				this.currPos = this.initial;
+			}
+
+			@Override
+			public String toString() {
+				return String.format("[robot [%03d] init=%s, v=%s, curr=%s]", id, initial, velocity, currPos);
+			}
+		}
+
+		protected final List<Robot> m_list;
+ 
+		public RobotParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_list = new ArrayList<Robot>();
+		}
+
+		public List<Robot> getList() { return m_list; }
+
+		// p=14,11 v=-25,-54
+		public void parse() throws IOException {
+			for (InternalReaderIterator iter = getFileIterator() ; iter.hasNext() ; ) {
+				String line = iter.next();
+				int fbpos = line.indexOf('=') + 1;
+				int fepos = line.indexOf(',', fbpos);
+				int xi = Integer.parseInt(line.substring(fbpos, fepos));
+				int sepos = line.indexOf(' ', fepos);
+				int yi = Integer.parseInt(line.substring(fepos+1, sepos));
+				Pos init = new Pos(xi, yi);
+
+				int fbpos2 = line.indexOf('=', sepos) + 1;
+				int fepos2 = line.indexOf(',', fbpos2);
+				int xv = Integer.parseInt(line.substring(fbpos2, fepos2));
+				int yv = Integer.parseInt(line.substring(fepos2+1));
+				Pos velocity = new Pos(xv, yv);
+
+				Robot r = new Robot(init, velocity);
+				System.out.format("robot imported: %s\n", r);
+				m_list.add(r);
+			}
+			System.out.format("finished reading %d records\n\n", m_list.size());
 		}
 	}
 
