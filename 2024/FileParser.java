@@ -296,6 +296,10 @@ public abstract class FileParser {
 		public Pos down() {
 			return new Pos(x, y+1);
                 }
+
+		public Pos add(Pos adder) {
+			return new Pos(adder.x + this.x, adder.y + this.y);
+		}
         }
 
 	/*
@@ -418,6 +422,7 @@ public abstract class FileParser {
 		}
 	}
 
+
 	/*
 	*/
 	public static class MatrixParser extends LineParser {
@@ -429,6 +434,81 @@ public abstract class FileParser {
 		public char getCell(int x, int y) { return m_list.get(y).charAt(x); }
 		public int getHeight() { return m_list.size(); }
 		public int getWidth() { return m_list.get(0).length(); }	
+	}
+
+	/*
+	*/
+	public static class RobotPathParser extends FileParser {
+		protected final List<char[]> 	m_map;
+		protected final boolean 	m_expand;
+		protected String 		m_instructions;
+ 
+		public RobotPathParser(int dayNum, boolean sample, boolean expand) throws IOException {
+			super(dayNum, sample);
+			m_skipBlank = false;
+			m_map = new ArrayList<char[]>();
+			m_instructions = "";
+			m_expand = expand;
+		}
+
+		public void parse() throws IOException {
+			int lineNum = 0;
+			InternalReaderIterator iter = getFileIterator();
+			for ( ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				if (line.length() == 0) {
+					break;
+				}
+				System.out.format("map %02d: %s\n", lineNum, line);
+
+				if (!m_expand) {
+					m_map.add(line.toCharArray());
+				} else {
+					var clist = new char[line.length() * 2];
+					for (int p = 0 ; p < line.length() ; p++) {
+						char pc = line.charAt(p);
+						switch (pc) {
+						case '.':
+							clist[p*2] = '.';
+							clist[p*2+1] = '.';
+							break;
+						case 'O':
+							clist[p*2] = '[';
+							clist[p*2+1] = ']';
+							break;
+						case '#':
+							clist[p*2] = '#';
+							clist[p*2+1] = '#';
+							break;
+						case '@':
+							clist[p*2] = '@';
+							clist[p*2+1] = '.';
+							break;
+						}
+		
+					}
+					m_map.add(clist);
+				}
+			}
+			System.out.format("finished reading %d map lines\n\n", lineNum);
+
+			for ( ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				m_instructions += line;
+				System.out.format("instr %02d: tot=%d, new=%d (%s)\n",
+					 lineNum, m_instructions.length(), line.length(), line);
+			}
+			System.out.format("finished reading %d instructions\n\n", m_instructions.length());
+		}
+
+		public char getCell(Pos p) { return m_map.get(p.y)[p.x]; }
+		public char getCell(int x, int y) { return m_map.get(y)[x]; }
+		public void setCell(Pos p, char c) { m_map.get(p.y)[p.x] = c; }
+		public void setCell(int x, int y, char c) { m_map.get(y)[x] = c; }
+		public int getHeight() { return m_map.size(); }
+		public int getWidth() { return m_map.get(0).length; }	
+		public String getInstructions() { return m_instructions; }
+		public List<char[]> getMap() { return m_map; }
 	}
 
 	/*
