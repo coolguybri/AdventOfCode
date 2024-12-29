@@ -432,6 +432,7 @@ public abstract class FileParser {
 		}
 
 		public char getCell(int x, int y) { return m_list.get(y).charAt(x); }
+		public char getCell(Pos pos) { return getCell(pos.x, pos.y); }
 		public int getHeight() { return m_list.size(); }
 		public int getWidth() { return m_list.get(0).length(); }	
 	}
