@@ -512,6 +512,45 @@ public abstract class FileParser {
 		public List<char[]> getMap() { return m_map; }
 	}
 
+
+	/*
+		Register A: 729
+		Register B: 0
+		Register C: 0
+
+		Program: 0,1,5,4,3,0
+	*/
+	public static class InstructionParser extends FileParser {
+
+		public int 			register_a;
+		public int 			register_b;
+		public int 			register_c;
+		public int			inst_ptr;
+
+		public ArrayList<Integer>	instructions;
+		
+		public InstructionParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			instructions = new ArrayList<Integer>();
+		}
+
+		public void parse() throws IOException {
+			InternalReaderIterator iter = getFileIterator();
+			register_a = Integer.parseInt(iter.next().substring(12));
+			register_b = Integer.parseInt(iter.next().substring(12));
+			register_c = Integer.parseInt(iter.next().substring(12));
+
+			String instructionLine = iter.next().substring(9);
+			StringTokenizer st = new StringTokenizer(instructionLine, ",");
+			while (st.hasMoreTokens()) {
+				instructions.add(Integer.parseInt(st.nextToken()));
+			}
+
+			System.out.format("machine: a=%d, b=%d, c=%d, instructions=%s)\n",
+				register_a, register_b, register_c, instructions);
+		}
+	}
+
 	/*
 	*/
 	public static class PageRuleParser extends FileParser {
