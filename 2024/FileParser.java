@@ -514,6 +514,38 @@ public abstract class FileParser {
 
 
 	/*
+		5,4
+		4,2
+		4,5
+		3,0
+		2,1
+	*/
+	public static class PosParser extends FileParser {
+
+		public ArrayList<Pos>	list;
+		
+		public PosParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			list = new ArrayList<Pos>();
+		}
+
+		public void parse() throws IOException {
+			for (InternalReaderIterator iter = getFileIterator(); iter.hasNext() ; ) {
+				String line = iter.next();
+				StringTokenizer st = new StringTokenizer(line, ",");
+				int x = Integer.parseInt(st.nextToken());
+				int y = Integer.parseInt(st.nextToken());
+				list.add(new Pos(x, y));
+			}
+
+			System.out.format("imported: %s)\n", list);
+		}
+
+		List<Pos> getList() { return list; }
+	}
+
+
+	/*
 		Register A: 729
 		Register B: 0
 		Register C: 0
