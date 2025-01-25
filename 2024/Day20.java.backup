@@ -1,0 +1,433 @@
+
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+
+public class Day20 {
+
+	private static int DAY_NUM = 20;
+	private static boolean SAMPLE_INPUT = false;
+	private static boolean part1 = true;
+	private static boolean part2 = !part1;
+	private static int numThreads = 1;
+
+	//private static int REPORT_INTERVAL = 1000000000;
+	private static int REPORT_INTERVAL = 100000;
+	//private static int REPORT_INTERVAL = 1;
+
+
+	public static enum Orientation {
+		Up,
+		Down,
+		Left,
+		Right,
+	}
+
+	public static class Path {
+		public List<FileParser.Pos> path;
+
+		public Path() {
+			path = new ArrayList<FileParser.Pos>();
+		}
+
+		public Path(List<FileParser.Pos> p) {
+			path = p;
+		}
+
+		public Path add(FileParser.Pos pos) {
+			var newPath = new ArrayList<FileParser.Pos>(path);
+			newPath.add(pos);
+			return new Path(newPath);
+		}
+
+		@Override
+		public String toString() {
+			return String.format("[path (%d)=%s]", path.size(), path);
+		}
+	}
+
+	public static class Matrix {
+		public final int width;
+		public final int height;
+		public char[][] cells;
+
+		public Matrix(FileParser.MatrixParser fp) {
+			width = fp.getWidth();
+			height = fp.getHeight();
+			cells = new char[width][height];
+
+			for (int w = 0 ; w < width ; w++) {
+				for (int h = 0 ; h < height ; h++) {
+					cells[h][w] = fp.getCell(w, h);
+				}
+			}
+		}
+
+		public char getCell(int x, int y) { return cells[y][x]; }
+		public char getCell(FileParser.Pos pos) { return getCell(pos.x, pos.y); }
+		public void setCell(int x, int y, char c) { cells[y][x] = c; }
+		public void setCell(FileParser.Pos pos, char c) { setCell(pos.x, pos.y, c); }
+		public int getHeight() { return height; }
+		public int getWidth() { return width; }
+
+		public void draw() {
+			for (int h = 0 ; h < height ; h++) {
+				for (int w = 0 ; w < width ; w++) {
+					System.out.format("%c", cells[h][w]);
+				}
+				System.out.format("\n");
+			}
+		}
+	}
+
+
+        public static class ScanContext {
+                public Matrix			matrix;
+		public FileParser.Pos 		startPos;
+		public FileParser.Pos 		endPos;
+		public Orientation		currOrient;
+		public AtomicLong		best_score;
+		public AtomicLong		num_queued;
+		public AtomicLong		num_processed;
+		public ConcurrentHashMap<String, Long>	processedPos;
+		public List<FileParser.Pos>	bestPath;
+//		public ExecutorService 		executor;
+		public Queue<EvalRec>		evalQueue;
+
+
+                public ScanContext(Matrix m) {
+                        matrix = m;
+			best_score = new AtomicLong();
+			num_queued = new AtomicLong();
+			num_processed = new AtomicLong();
+			processedPos = new ConcurrentHashMap<String, Long>();
+			bestPath = Collections.synchronizedList(new ArrayList<FileParser.Pos>());
+			//executor = Executors.newFixedThreadPool(numThreads);
+			evalQueue = new Queue<EvalRec>();
+                }
+
+		@Override
+		public String toString() {
+			return String.format("[sc matrix=%dx%d, start=%s, end=%s]",
+				 matrix.getWidth(), matrix.getHeight(), startPos, endPos);
+		}
+
+
+		public boolean inBounds(FileParser.Pos currPos) {
+			if (currPos.x < 0 || currPos.x >= matrix.getWidth())
+				return false;
+			if (currPos.y < 0 || currPos.y >= matrix.getHeight())
+				return false;
+			return true;
+		}
+
+
+		public boolean probeNeighbor(FileParser.Pos nextPos) throws Exception {
+			if (!inBounds(nextPos)) {
+				return false;
+			}
+
+			char c = matrix.getCell(nextPos);	
+			if (c == '#') {
+				return false;
+			}
+
+			if (c == 'E') {
+				// System.out.format("[%d] probeNeighbor: found neighbor in horizon\n",
+				// Thread.currentThread().threadId());
+				return true;
+			}
+
+			if (c == '.') {
+				return true;
+			}
+
+			throw new Exception(String.format("YO: bad char %c in map", c));
+		}
+
+
+		public boolean exploreNeighbor(FileParser.Pos currPos, Path currPath, Orientation currOrient, long currCost,
+					FileParser.Pos nextPos, Orientation nextOrient) throws Exception {
+			long nextCost = currCost + 1;
+
+			// if we already hit this neighbor in this path, we have looped, and should end this path.
+			if (currPath.path.contains(nextPos)) {
+				// System.out.format("[%d] exploreNeighbor: skipping %s already-visited\n",
+				//  Thread.currentThread().threadId(), nextPos);
+				return false;
+			}
+
+			// make sure the neighbor is an actual open space.
+			if (!probeNeighbor(nextPos)) {
+				return false;
+			}
+
+			while (true) {
+				boolean skip = false;
+				long costDiff = 0;
+				Long pathCost = processedPos.get(String.format("%s:%s", nextPos, nextOrient));
+				if (pathCost != null) {
+					costDiff = currCost - pathCost;
+					if (costDiff > 1000) {
+						skip = true;
+					}
+				} else {
+					costDiff = -currCost;
+				}
+
+				if (skip) {
+					// System.out.format("[%d] exploreNeighbor: skipping %s:%s (costdiff=%d) due to better path there already (best=%d, curr=%d)\n",
+					// Thread.currentThread().threadId(), nextPos, nextOrient, costDiff, pathCost, currCost);
+					return false;
+				} 
+
+				if (pathCost == null) {
+					if (processedPos.putIfAbsent(String.format("%s:%s", nextPos, nextOrient), currCost) == null) {
+						// System.out.format("[%d] exploreNeighbor: setting best path to %s=%d\n",
+						// Thread.currentThread().threadId(), nextPos, currCost);
+						break;
+					}
+				} else {
+					if ((pathCost == currCost) || processedPos.replace(String.format("%s:%s", nextPos, nextOrient), pathCost, currCost)) {
+						// System.out.format("[%d] exploreNeighbor: replacing best path to %s=%d (prev=%d)\n",
+						// Thread.currentThread().threadId(), nextPos, currCost, pathCost);
+						break;
+					}
+				}
+
+				System.out.format("[%d] exploreNeighbor: trying again for sync for %s\n",
+					 Thread.currentThread().threadId(), currPos);
+			} 
+
+			// QUEUE this next item for processing.
+			Path nextPath = currPath.add(currPos);
+			queueEvaluation(nextPos, nextPath, nextOrient, nextCost);
+			return true;
+		}
+	
+
+		public void evaluate(FileParser.Pos currPos, Path currPath, 
+						Orientation currOrient, long currCost) throws Exception {
+
+			// Evaluate current node.
+			char c = matrix.getCell(currPos);
+			if (c == 'E') {
+				// We found the end!
+				Path p = currPath.add(currPos);
+				//System.out.format("[%d] evaluate: found END score=%d, path=%s\n",
+				//	 Thread.currentThread().threadId(), currCost, p);
+				System.out.format("[%d] evaluate: found END score=%d\n",
+					 Thread.currentThread().threadId(), currCost);
+
+				// Update the best score.
+				while (true) {
+					long best = best_score.get();
+					if ((best != 0) && (currCost > best)) {
+						System.out.format("[%d] evaluate: SCORE %d is not the best (%d)\n",
+							 Thread.currentThread().threadId(), currCost, best);
+						break;
+					}
+
+					if ((best != currCost) && !best_score.compareAndSet(best, currCost)) {
+						System.out.format("[%d] evaluate: whoops, somebody updating at same time, lets try again\n",
+							 Thread.currentThread().threadId());
+						continue;
+					}
+
+					if (best != currCost) {
+						bestPath.clear();
+						System.out.format("[%d] evaluate: SCORE %d is updated\n",
+							 Thread.currentThread().threadId(), currCost);
+					}
+
+					for (FileParser.Pos bpos : p.path) {
+						bestPath.add(bpos);
+					}
+
+					System.out.format("[%d] evaluate: SCORE %d is NOW the best (prev=%d)\n",
+						 Thread.currentThread().threadId(), currCost, best);
+					break;
+				}
+
+				return;
+			}
+
+			// We are not at the end, time to explore the relevent neighbors.
+			if (currOrient != Orientation.Down) {
+				FileParser.Pos up = currPos.up();
+				exploreNeighbor(currPos, currPath, currOrient, currCost, up, Orientation.Up);
+			}
+			if (currOrient != Orientation.Up) {
+				FileParser.Pos down = currPos.down();
+				exploreNeighbor(currPos, currPath, currOrient, currCost, down, Orientation.Down);
+			}
+			if (currOrient != Orientation.Right) {
+				FileParser.Pos left = currPos.left();
+				exploreNeighbor(currPos, currPath, currOrient, currCost, left, Orientation.Left);
+			}
+			if (currOrient != Orientation.Left) {
+				FileParser.Pos right = currPos.right();
+				exploreNeighbor(currPos, currPath, currOrient, currCost, right, Orientation.Right);
+			}
+		}
+
+
+		public void queueEvaluation(FileParser.Pos currPos, Path currPath, Orientation currOrient, long currCost) throws Exception {
+			long q = num_queued.incrementAndGet();
+			boolean reportNow = (q % REPORT_INTERVAL) == 0;
+			if (reportNow) {
+				System.out.format("[%d] queue: pos=%s, path=%s, orient=%s, cost=%d, q=%d, p=%d\n",
+					 Thread.currentThread().threadId(), currPos, currPath, currOrient, currCost,
+						num_queued.get(), num_processed.get());
+			}
+
+			executor.submit(new Runnable() {
+					    public void run() {
+						long processed = num_processed.incrementAndGet();
+						if (reportNow) {
+							System.out.format("[%d] dispatch: starting %s/%s (%d), q=%d, p=%d, bestscore=%d\n",
+							 Thread.currentThread().threadId(),
+							 currPos, currOrient, currCost,
+							 num_queued.get(), num_processed.get(), best_score.get());
+						}
+
+						try {
+							evaluate(currPos, currPath, currOrient, currCost);
+						} catch (Exception e) {
+							System.out.format("[%d] dispatch: exception in task: %s\n",
+								 Thread.currentThread().threadId(), e);
+							e.printStackTrace();
+						}
+
+						long remaining = num_queued.get() - num_processed.get();
+						if (reportNow) {
+								/* System.out.format("[%d] dispatch: ending %s/%s, q=%d, p=%d, remaining=%d, score=%d\n",
+								 Thread.currentThread().threadId(),
+								currPos, currOrient,
+								 num_queued.get(), num_processed.get(),
+								 remaining, best_score.get()); */
+						}
+
+						if (remaining == 0) {
+							System.out.format("[%d] dispatch: bounced on 0, q=%d, p=%d, bestscore=%d\n",
+								Thread.currentThread().threadId(),
+								 num_queued.get(), num_processed.get(), best_score.get());
+							executor.shutdown();
+						} 
+					}});
+		}
+
+		public void waitForCompletion() {
+			// WAIT for all threads to end
+			try {
+				System.out.format("[%d] dispatch: waiting for unfinished tasks\n",
+					Thread.currentThread().threadId());
+				executor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+			    e.printStackTrace();
+			}
+			System.out.format("[%s] dispatch: All tasks have finished\n", Thread.currentThread().threadId()); 
+		}
+
+
+
+		public static ScanContext create(Matrix m) {
+			
+			int width = m.getWidth();
+			int height = m.getHeight();
+			ScanContext sc = new ScanContext(m);
+
+			return sc;
+		}
+	}
+
+		
+	/*
+	*/
+	public static void main(String[] args) throws Exception { 
+
+ 		// Import the data; will throw if no file or data makes no sense.
+                FileParser.MatrixParser fp = new FileParser.MatrixParser(DAY_NUM, SAMPLE_INPUT);
+                fp.parse();
+
+		FileParser.Pos startPos = null;
+		FileParser.Pos endPos = null;
+		List<FileParser.Pos> walls = new ArrayList<FileParser.Pos>();
+		for (int h = 0 ; h < fp.getHeight() ; h++) {
+			for (int w = 0 ; w < fp.getWidth() ; w++) {
+				FileParser.Pos pos = new FileParser.Pos(w, h);
+				char c = fp.getCell(pos);
+				if (c == 'S') {
+					startPos = pos;
+				} else if (c == 'E') {
+					endPos = pos;
+				} else if (c == '#') {
+					walls.add(pos);
+				}
+			}
+		}
+
+		Matrix m = new Matrix(fp);
+               	ScanContext sc = new ScanContext(m); 
+		sc.startPos = startPos;
+		sc.endPos = endPos;
+                System.out.format("Analysis start: sc=%s, part1=%b, wals=%s\n", sc, part1, walls);
+		m.draw();
+
+		// Grab the baseline.
+		sc.queueEvaluation(sc.startPos, new Path(), Orientation.Right, 0);
+		sc.waitForCompletion();
+		long baseline_score = sc.best_score.get();
+                System.out.format("Baseline Cost=%d\n", baseline_score);
+
+		// iterate through the wall permutations.
+		var best_map = new HashMap<Long, Long>();
+		long best_score = baseline_score;
+		long over_thresh = 0;
+		for (int w = 0 ; w < walls.size() ; w++) {
+			FileParser.Pos wall1 = walls.get(w);
+			char cv = m.getCell(wall1);
+			if (cv != '#')
+				continue;
+
+			if ((wall1.x == 0) || (wall1.x == fp.getWidth()) || (wall1.y == 0) || (wall1.y == fp.getHeight()))
+				continue;
+
+			// TODO: select the second wall piece.
+			
+
+			Matrix mv = new Matrix(fp);
+			mv.setCell(wall1, '.');
+
+			ScanContext scv = new ScanContext(mv); 
+			scv.startPos = startPos;
+			scv.endPos = endPos;
+			System.out.format(" Variant start: sc=%s, wall1=%s (%c), ovr_thresh=%d\n", scv, wall1, cv, over_thresh);
+			//mv.draw();
+
+			// Grab the baseline.
+			scv.queueEvaluation(scv.startPos, new Path(), Orientation.Right, 0);
+			scv.waitForCompletion();
+			long variant_score = scv.best_score.get();
+			long savings = (baseline_score - variant_score);
+			System.out.format(" Variant Cost=%d (%d)\n", variant_score, savings);
+			if (variant_score < best_score) {
+				System.out.format(" Variant NEW HIGH=%d (%d from baseline)\n", variant_score, savings);
+				best_score = variant_score;
+			}
+
+			if (savings > 100) {
+				over_thresh++;
+				System.out.format(" Variant OVER THRESH=%d (tot=%d)\n", savings, over_thresh);
+			}
+
+			long currCount = best_map.getOrDefault(savings, 0L);
+			currCount++;
+			best_map.put(savings, currCount);
+		}
+
+                System.out.format("num over thresh=%d\n", over_thresh);
+                System.out.format("Savings Map=%s\n", best_map);
+	}
+}

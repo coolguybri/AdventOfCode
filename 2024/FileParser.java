@@ -546,6 +546,51 @@ public abstract class FileParser {
 
 
 	/*
+		r, wr, b, g, bwu, rb, gb, br
+
+		brwrr
+		bggr
+		gbbr
+		rrbgbr
+		ubwu
+		bwurrg
+		brgr
+		bbrgwb
+	*/
+	public static class SymbolParser extends FileParser {
+
+		public final ArrayList<String>	symbols;
+		public final ArrayList<String>	compositions;
+		
+		public SymbolParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			symbols = new ArrayList<String>();
+			compositions = new ArrayList<String>();
+		}
+
+		public void parse() throws IOException {
+			InternalReaderIterator iter = getFileIterator();
+
+			String rawSymbols = iter.next();
+			StringTokenizer st = new StringTokenizer(rawSymbols, ",");
+			while (st.hasMoreTokens()) {
+				symbols.add(st.nextToken().trim());
+			}
+
+			// suck up the compositons
+			while (iter.hasNext()) {
+				String line = iter.next().trim();
+				if (line.length() > 0) {
+					compositions.add(line);
+				}
+			}
+
+			System.out.format("imported: symbols=%s, compositionss=%s)\n",
+				symbols, compositions);
+		}
+	}
+
+	/*
 		Register A: 729
 		Register B: 0
 		Register C: 0
