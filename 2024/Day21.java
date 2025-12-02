@@ -8,13 +8,14 @@ import java.util.stream.*;
 public class Day21 {
 
 	private static int DAY_NUM = 21;
-	private static boolean SAMPLE_INPUT = false;
-	private static boolean part1 = false;
+	private static boolean SAMPLE_INPUT = true;
+	private static boolean part1 = true;
 	private static boolean part2 = !part1;
 
 	private static int numThreads = 1;
 	private static long REPORT_INTERVAL = 100000;
 
+	private static AtomicInteger fileseq = new AtomicInteger(0);
 
 	public static abstract class DirectionalPad {
 		public HashMap<Character, FileParser.Pos>	posMap;
@@ -31,12 +32,108 @@ public class Day21 {
 		    elements[a] = elements[b];
 		    elements[b] = tmp;
 		}
-	
-		// Heap’s algorithm for generating permutations	
-		private static List<String> generatePermutations(String input) {
 
-			var outputList = new ArrayList<String>();
-			outputList.add(input);
+		private static HashMap<String, List<String>> permutationCache = new HashMap<String, List<String>>();
+	
+		// Revised verion of Heap’s algorithm for generating permutations from chunks
+		private static long generatePermutationsForChunks(List<List<String>> collector, BufferedWriter writer) {
+
+			long writeCount = 0;
+
+			// Build index for all chunks.
+			int collectorLen = collector.size();
+			int[] chunkIndexes = new int[collectorLen];
+			for (int i = 0; i < collectorLen; i++) {
+			    chunkIndexes[i] = 0;
+			}
+
+			// Determine the maximum length of the stringbuffer that we will need.
+			int maxItemLen = 0;
+			int maxItemCount = 1;
+			StringBuilder tempSb = new StringBuilder();
+			for (int c = 0 ; c < collectorLen ; c++) {
+				List<String> chunk = collector.get(c);
+				tempSb.append(String.format("[%d]", chunk.size()));
+				int maxLenInChunk = 0;
+				for (String item : chunk) {
+					int slen = item.length();
+					if (slen > maxLenInChunk) {
+						maxLenInChunk = slen;
+					}
+				}
+				maxItemLen += maxLenInChunk;
+				maxItemCount *= chunk.size();
+			}
+			//System.out.format("[%s] perForChunk-start: numchunks=%d, maxItemLen=%d, maxItemCount=%d, chunkspec:%s\n",
+			//	Thread.currentThread().threadId(), collector.size(), maxItemLen, maxItemCount, tempSb.toString());
+
+			//var outputList = new ArrayList<String>(maxItemCount);
+			StringBuilder sb = new StringBuilder(maxItemLen);
+			//char[] sb = new char[maxItemLen];
+			//int sbpos = 0;
+		
+			while (true) {
+				// Add the current item.
+				sb.setLength(0);
+				//sbpos = 0;
+				for (int c = 0 ; c < collectorLen ; c++) {
+					List<String> chunk = collector.get(c);
+					int thisIndex = chunkIndexes[c];
+					String item = chunk.get(thisIndex);
+					sb.append(item);
+				}
+
+				 //System.out.format("[%s] perForChunk-item: outputlen=%d\n",
+				//	Thread.currentThread().threadId(), sb.length());
+				String fullItem = sb.toString();
+				//outputList.add(fullItem);	
+				writer.write(fullItem);
+				writer.newLine();
+				writeCount++;
+
+				// Incrment the counters.
+				int chunkToIncrment = collectorLen - 1;
+				for ( ; chunkToIncrment >= 0 ; chunkToIncrment--) {
+					int lastIndex = chunkIndexes[chunkToIncrment];
+					int lastMax = collector.get(chunkToIncrment).size();
+
+					lastIndex++;
+					if (lastIndex < lastMax) {
+						chunkIndexes[chunkToIncrment] = lastIndex;
+						// System.out.format("[%s] counter: incremented index chunkToIncrment=%d to %d, needshift=%b\n",
+						//	Thread.currentThread().threadId(), chunkToIncrment, lastIndex, false);
+						break;
+					}
+
+					lastIndex = 0;
+					chunkIndexes[chunkToIncrment] = 0;
+					//System.out.format("[%s] counter: incremented index chunkToIncrment=%d to %d, needshift=%b\n",
+					 //       Thread.currentThread().threadId(), chunkToIncrment, lastIndex, true);
+				}
+
+				if (chunkToIncrment < 0) {
+				//	System.out.format("[%s] counter: breaking out with chunkToIncrment=%d!\n",
+				//		Thread.currentThread().threadId(), chunkToIncrment);
+					break;
+				}
+			}
+
+			//System.out.format("[%s] perForChunk-end with %d entries\n",
+			//	Thread.currentThread().threadId(), outputList.size());
+			return writeCount;
+		}
+
+
+		// Heap’s algorithm for generating permutations	
+		private static List<String> generatePermutationsAndSuffix(String input) {
+
+			List<String> cacheResult = permutationCache.get(input);
+			if (cacheResult != null) {
+				return cacheResult;
+			}
+
+			var outputSet = new HashSet<String>();
+			outputSet.add(input + 'A');
 
 			int inputLen = input.length();
 			int[] indexes = new int[inputLen];
@@ -49,7 +146,7 @@ public class Day21 {
 			while (i < inputLen) {
 			    if (indexes[i] < i) {
 				swap(elements, i % 2 == 0 ?  0: indexes[i], i);
-				outputList.add(new String(elements));
+				outputSet.add(new String(elements) + 'A');
 				indexes[i]++;
 				i = 0;
 			    }
@@ -59,90 +156,58 @@ public class Day21 {
 			    }
 			}
 
+			var outputList = new ArrayList<String>(outputSet);
+			System.out.format("[%s] generated permutations for %s: %s\n",
+				Thread.currentThread().threadId(), input, outputList);
+			permutationCache.put(input, outputList);
 			return outputList;
 		}
 
+
 		/*
 		*/
-		public List<String> generateSequenceFor(List<String> inputList) throws Exception {
+		public String generateSequenceFor(String inputFile) throws Exception {
 
-			List<String> outputList = new ArrayList<String>();
+			var reader =  new BufferedReader(new FileReader(inputFile));
+			long readCount = 0;
 
-			for (var input : inputList) {
+			String outputFile = String.format("tmp/yo-%000d.list", fileseq.getAndIncrement());
+			var writer =  new BufferedWriter(new FileWriter(outputFile));
+			long writeCount = 0;
+
+			String input = null;
+			while ((input = reader.readLine()) != null) {
+				readCount += 1;
 				FileParser.Pos currPos = posMap.get('A');
 
 				// Generate all the permutations that would generate that sequence. This collector will have a list for every input
 				// character, representing the permutations of stroked to transition from one key to another.
 				var collector = new ArrayList<List<String>>();
+				char[] scratchBuf = new char[20];
 				for (Character c : input.toCharArray()) {
 					FileParser.Pos nextPos = posMap.get(c);
+					int scratchPos = 0;
 					// System.out.format("[%s] %s: processing %c; from %s to %s\n",
 					// Thread.currentThread().threadId(), getName(), c, currPos, nextPos);
 
-					String pressesForThisOne = "";
+					//String pressesForThisOne = "";
 					int xDelta = nextPos.x - currPos.x;
 					for (int i = xDelta ; i < 0 ; i++) {
-						pressesForThisOne += '<';
+						scratchBuf[scratchPos++] = '<';
 					}
 					for (int i = 0 ; i < xDelta ; i++) {
-						pressesForThisOne += '>';
+						scratchBuf[scratchPos++] = '>';
 					}
 					int yDelta = nextPos.y - currPos.y;
 					for (int i = yDelta ; i < 0 ; i++) {
-						pressesForThisOne += '^';
+						scratchBuf[scratchPos++] = '^';
 					}
 					for (int i = 0 ; i < yDelta ; i++) {
-						pressesForThisOne += 'v';
+						scratchBuf[scratchPos++] = 'v';
 					}
 
 					// Gernerate all the output sequences for this set.
-					List<String> permutations = generatePermutations(pressesForThisOne);
-					permutations = permutations.stream()
-								.map(str -> (str + 'A'))
-								.collect(Collectors.toList());
-					Set<String> set = new HashSet<>(permutations);
-					permutations.clear();
-					permutations.addAll(set);
-
-					// Verify that the psth does not hit the empty spot.
-					/*var tracePos = currPos;
-					List<String> safePermutations = new ArrayList<String>();
-					for (var tracePerm : permutations) {
-						boolean coolToAdd = true;
-						for (var traceChar : tracePerm.toCharArray()) {
-							switch (traceChar) {
-							case '<':
-								tracePos = tracePos.left();
-								break;
-							case '>':
-								tracePos = tracePos.right();
-								break;
-							case '^':
-								tracePos = tracePos.up();
-								break;
-							case 'v':
-								tracePos = tracePos.down();
-								break;
-							case 'A':
-								// cool, skip it.
-								break;
-							default:
-								throw new Exception("crap, validation failed");
-							}
-							
-							if (posIsIllegal(tracePos)) {
-								coolToAdd = false;
-								//System.out.format("[%s] %s: skipping due to bad keypad: (start=%s, bad=%s) %s\n",
-								//  Thread.currentThread().threadId(), getName(), currPos, tracePos, tracePerm);
-								break;
-							}
-						}
-	
-						if (coolToAdd) {
-							safePermutations.add(tracePerm);
-						}
-					}
-					permutations = safePermutations; */
+					List<String> permutations = generatePermutationsAndSuffix(new String(scratchBuf, 0, scratchPos));
 
 					// System.out.format("[%s] %s: generated %s: permutations (%d) %s\n",
 					// Thread.currentThread().threadId(), getName(), pressesForThisOne, permutations.size(), permutations);
@@ -152,33 +217,32 @@ public class Day21 {
 				}
 
 				// Convert the chunks recorded above to a list of actual permutations.
-				List<String> prevList = new ArrayList<String>(collector.get(0));
-				for (int c = 1 ; c < collector.size() ; c++) {
-					List<String> currChunk = collector.get(c);
-					List<String> nextList = new ArrayList<String>();
-					for (String nextPermutation : currChunk) {
-						for (String prevPermutation : prevList) {
-							nextList.add(prevPermutation + nextPermutation);
-						}
-					}
-					prevList = nextList;
-				}
-
-				outputList.addAll(prevList);
+				long genlen = generatePermutationsForChunks(collector, writer);
+				writeCount += genlen;
+				System.out.format("[%s] generateSequenceFor loop with %d entries (total=%d)\n",
+					Thread.currentThread().threadId(), genlen, writeCount);
+				
 			}
 
-			return outputList;
+
+			System.out.format("[%s] generateSequenceFor end with %d entries into file %s\n",
+				Thread.currentThread().threadId(), writeCount, outputFile);
+			reader.close();
+			writer.close();
+			return outputFile;
 		}
 	}
 
 	public static class DirectionalPadToNumericPad extends DirectionalPad {
+
+		private static FileParser.Pos DEAD_SPOT = new FileParser.Pos(0, 3);
 
 		@Override
 		public String getName() { return "dpad->numpad"; }
 
 		@Override
 		public boolean posIsIllegal(FileParser.Pos tracePos) {
-			return tracePos.equals(new FileParser.Pos(0, 3));
+			return tracePos.equals(DEAD_SPOT);
 		}
 
 		public DirectionalPadToNumericPad() {
@@ -199,6 +263,8 @@ public class Day21 {
 
 	public static class DirectionalPadToDirectionalPad extends DirectionalPad {
 
+		private static FileParser.Pos DEAD_SPOT = new FileParser.Pos(0, 0);
+
 		private int dpadid;
 
 		@Override
@@ -206,7 +272,7 @@ public class Day21 {
 
 		@Override
 		public boolean posIsIllegal(FileParser.Pos tracePos) {
-			return tracePos.equals(new FileParser.Pos(0, 0));
+			return tracePos.equals(DEAD_SPOT);
 		}
 
 		public DirectionalPadToDirectionalPad(int id) {
@@ -227,7 +293,8 @@ public class Day21 {
 			list = new ArrayList<DirectionalPad>();
 			list.add(new DirectionalPadToNumericPad());
 
-			int additional = part1 ? 2 : 25;
+			//int additional = part1 ? 2 : 25;
+			int additional = 3;
 			for (int i = 0 ; i < additional ; i++) {
 				var dpad = new DirectionalPadToDirectionalPad(i+1);
 				list.add(dpad);
@@ -240,70 +307,122 @@ public class Day21 {
 			System.out.format("[%s] chain: processing %d keypads in the chain for %s\n",
 				Thread.currentThread().threadId(), list.size(), sequenceForBackEnd);
 
-			List<String> currList = new ArrayList<String>();
-			currList.add(sequenceForBackEnd);
+			// Seed the first inputsequence into an init file.
+			String initReadFile = String.format("tmp/init-%000d.list", fileseq.getAndIncrement());
+			{
+				var writer =  new BufferedWriter(new FileWriter(initReadFile));
+				writer.write(sequenceForBackEnd);
+				writer.newLine();
+				writer.close();
+			}
+
+			String currFile = initReadFile;
 			for (var dpad : list) {
-				List<String> newList = dpad.generateSequenceFor(currList);
-				System.out.format("[%s] chain: updating %d (%s) -> %d (%s) (by %s)\n",
-					Thread.currentThread().threadId(), currList.size(), currList.get(0),
-					newList.size(), newList.get(0), dpad.getName());
+				String newFile = dpad.generateSequenceFor(currFile);
 
-				List<String> newListSafe = new ArrayList<String>();
-				for (String contender : newList) {	
-					boolean coolToAdd = true;
-
-					// Verify that the psth does not hit the empty spot.
-					var tracePos = dpad.posMap.get('A');
-					for (var traceChar : contender.toCharArray()) {
-						switch (traceChar) {
-						case '<':
-							tracePos = tracePos.left();
-							break;
-						case '>':
-							tracePos = tracePos.right();
-							break;
-						case '^':
-							tracePos = tracePos.up();
-							break;
-						case 'v':
-							tracePos = tracePos.down();
-							break;
-						case 'A':
-							// cool, skip it.
-							break;
-						default:
-							throw new Exception("crap, validation failed");
+				int maxlen = 0;
+				int minlen = Integer.MAX_VALUE;
+				int fileLineCount = 0;
+				String sample = null;
+				{
+					Reader reader =  new BufferedReader(new FileReader(currFile));
+					String contender = null;
+					while ((contender = reader.readLine()) != null) {
+						if (sample == null) {
+							sample = contender;
 						}
-						
-						if (dpad.posIsIllegal(tracePos)) {
-							coolToAdd = false;
-							//System.out.format("[%s] %s: skipping due to bad keypad: (bad=%s) %s\n",
-							//  Thread.currentThread().threadId(), dpad.getName(), tracePos, contender);
-							break;
-						}
-					}
-
-					if (coolToAdd) {
-						newListSafe.add(contender);
+						if (contender.length() > maxlen)
+							maxlen = contender.length();
+						if (contender.length() < minlen)
+							minlen = contender.length();
+						fileLineCount++;
 					}
 				}
+
+				//System.out.format("[%s] chain: updating-a %d (%s) -> %d (%s) (by %s), max=%d, min=%d\n",
+				//	Thread.currentThread().threadId(), fileLineCount, sample,
+				//	newList.size(), newList.get(0), dpad.getName(), maxlen, minlen);
+				System.out.format("[%s] chain: updating-a %d (%s) (by %s), max=%d, min=%d\n",
+					Thread.currentThread().threadId(), fileLineCount, sample,
+					dpad.getName(), maxlen, minlen);
+
+				long dropped = 0;
+				long notsafe = 0;
+				String safeFile = String.format("tmp/safe-%000d.list", fileseq.getAndIncrement());
+				{
+					var writer =  new BufferedWriter(new FileWriter(safeFile));
+					var reader =  new BufferedReader(new FileReader(currFile));
+					String contender = null;
+					while ((contender = reader.readLine()) != null) {
+
+						int slen = contender.length();
+						if ((slen - minlen) > 2) { // prev 6
+							/*System.out.format("[%s] chain: dropping %s with len=%d, max=%d, min=%d\n",
+								Thread.currentThread().threadId(), contender,
+								slen, maxlen, minlen); */
+							dropped++;
+							continue;
+						} 
+
+						// Verify that the psth does not hit the empty spot.
+						var tracePos = dpad.posMap.get('A');
+						boolean coolToAdd = true;
+						for (var traceChar : contender.toCharArray()) {
+							switch (traceChar) {
+							case '<':
+								tracePos = tracePos.left();
+								break;
+							case '>':
+								tracePos = tracePos.right();
+								break;
+							case '^':
+								tracePos = tracePos.up();
+								break;
+							case 'v':
+								tracePos = tracePos.down();
+								break;
+							case 'A':
+								// cool, skip it.
+								break;
+							default:
+								throw new Exception(String.format("crap, validation failed with %s", traceChar));
+							}
+							
+							if (dpad.posIsIllegal(tracePos)) {
+								coolToAdd = false;
+								//System.out.format("[%s] %s: skipping due to bad keypad: (bad=%s) %s\n",
+								//  Thread.currentThread().threadId(), dpad.getName(), tracePos, contender);
+								break;
+							}
+						}
+
+						if (coolToAdd) {
+							newListSafe.add(contender);
+						} else {
+							notsafe++;
+						}
+					}
+				}
+
+				System.out.format("[%s] chain: updating-b %d (%s) -> %d (%s) (by %s), max=%d, min=%d, dropped=%d, notsfae=%d\n",
+					Thread.currentThread().threadId(), currList.size(), currList.get(0),
+					newListSafe.size(), newListSafe.get(0), dpad.getName(), maxlen, minlen, dropped, notsafe);
 
 				currList = newListSafe;
 			}
 
-			// Find the ones witht he shortest keystrokes.
+			// Find the ones with the shortest keystrokes.
 			int shortestTime = -1;
 			String shortestSequence = null;
 			for (String contender : currList) {
-
 				if ((shortestTime < 0) || (contender.length() < shortestTime)) {
 					shortestTime = contender.length();
 					shortestSequence = contender;
-					System.out.format("[%s] chain: found shortest time: %d:%s\n",
-						Thread.currentThread().threadId(), contender.length(), contender);
 				}
 			}
 
+			System.out.format("[%s] chain: found shortest time: %d:%s\n",
+				Thread.currentThread().threadId(), shortestSequence.length(), shortestSequence);
 			return shortestSequence;
 		}
 	}

@@ -5,8 +5,8 @@ import java.util.*;
 public class Day05 {
 
 	private static int DAY_NUM = 5;
-	private static boolean SAMPLE_INPUT = false;
- 	private static boolean part1 = true;
+	private static boolean SAMPLE_INPUT = true;
+ 	private static boolean part1 = false;
 	private static boolean part2 = !part1;
 
 
@@ -21,10 +21,10 @@ public class Day05 {
 
 			for (Iterator<FileParser.PageRuleParser.PageRule> ruleIter = fp.getRules().iterator() ; ruleIter.hasNext() ; ) {
 				FileParser.PageRuleParser.PageRule rule = ruleIter.next();
-				//System.out.format(" eval-start: currPage=%d, rule=%s\n", currPage, rule);
+				// System.out.format(" eval-start: currPage=%d, rule=%s\n", currPage, rule);
 
 				if (rule.before == currPage) {
-				//	System.out.format(" eval-mid: currPage=%d, rule MATCH_BEFORE\n", currPage);
+					// System.out.format(" eval-mid: currPage=%d, rule MATCH_BEFORE\n", currPage);
 					for (int j = i - 1 ; j >= 0 ; j--) {
 						int compPage = update.get(j);
 						if (compPage == rule.after) {
@@ -33,7 +33,7 @@ public class Day05 {
 						}
 					}
 				} else if (rule.after == currPage) {
-				//	System.out.format(" eval-mid: currPage=%d, rule MATCH_AFTER\n", currPage);
+					// System.out.format(" eval-mid: currPage=%d, rule MATCH_AFTER\n", currPage);
 					for (int j = i + 1 ; j < updateLen ; j++) {
 						int compPage = update.get(j);
 						if (compPage == rule.before) {
@@ -42,7 +42,7 @@ public class Day05 {
 						}
 					}
 				} else {
-					//System.out.format(" eval-end: currPage=%d, no rule match, skipping\n", currPage);
+					// System.out.format(" eval-end: currPage=%d, no rule match, skipping\n", currPage);
 				}
 			}
 		}
@@ -50,6 +50,53 @@ public class Day05 {
 		// System.out.format(" eval-end: rule OK\n");
 		return true;
 	}
+
+	/*
+	*/
+	protected static List<Integer> fixOrder(List<Integer> u, FileParser.PageRuleParser fp) {
+
+		List<Integer> currUpdate = new ArrayList<Integer>(u);
+		for (int attempt = 0 ;  ; attempt++) {
+			int updateLen = currUpdate.size();
+			boolean foundFailure = false;
+			System.out.format(" fix: starting attempt=%d, update=%s\n", attempt, currUpdate);
+
+			for (int i = 0 ; !foundFailure && (i < updateLen) ; i++) {
+				int currPage = currUpdate.get(i);
+
+				for (Iterator<FileParser.PageRuleParser.PageRule> ruleIter = fp.getRules().iterator() ;
+					 !foundFailure && ruleIter.hasNext() ; ) {
+					FileParser.PageRuleParser.PageRule rule = ruleIter.next();
+					System.out.format(" fix: applyRule attempt=%d, currPage=%d, rule=%s\n",
+						 attempt, currPage, rule);
+
+					if (rule.before == currPage) {
+						System.out.format(" fix: currPage=%d, rule MATCH_BEFORE %d\n",
+							rule.before, rule.after);
+						for (int j = i - 1 ; j >= 0 ; j--) {
+							int compPage = currUpdate.get(j);
+							if (compPage == rule.after) {
+								System.out.format(" fix: attempt=%d, currPage=%d, rule BREAK: %d is before\n",
+									attempt, currPage, compPage);
+								currUpdate.remove(j);
+								if (i == currUpdate.size()) 
+									currUpdate.add(compPage);
+								else
+									currUpdate.add(i+1, compPage);
+
+								foundFailure = true;
+								break;
+							}
+						}
+					} else {
+						System.out.format(" fix: attempt=%d currPage=%d, no rule match, skipping\n",
+							 attempt, currPage);
+					}
+				}
+			}
+		}
+	}
+
 
 	public static long factorial(long number) {
 		long result = 1;
@@ -138,11 +185,13 @@ public class Day05 {
 				long searchSpace = factorial(update.size());
 				long searchStart = System.currentTimeMillis();
 				System.out.format("UPDATE: NO: starting search for %s, total=%d\n", update, searchSpace);
-
 				progress_total = searchSpace;
 				progress_current = 0;
-				List<Integer> newUpdate = findOrder(new ArrayList<Integer>(), update, fp, 0);
+
+				List<Integer> newUpdate = fixOrder(update, fp);
 				long searchEnd = System.currentTimeMillis();
+
+
 				int halfPoint = newUpdate.size() / 2;
 				int halfPointPage = newUpdate.get(halfPoint);
 				sumUnMatched += halfPointPage;
