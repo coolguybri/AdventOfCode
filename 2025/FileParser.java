@@ -508,6 +508,38 @@ public abstract class FileParser {
 		}
 	}
 	
+	
+	/*
+	*/
+	public static class BatteryCacheParser extends FileParser {
+		protected final List<List<Integer>> m_list;
+ 
+		public BatteryCacheParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_list = new ArrayList<List<Integer>>();
+		}
+
+		public int getBankCount() { return m_list.size(); }
+		public List<Integer> getBank(int index) { return m_list.get(index); }
+
+		public void parse() throws IOException {
+			int lineNum = 0;
+			for (InternalReaderIterator iter = getFileIterator() ; iter.hasNext() ; lineNum++) {
+				String line = iter.next();
+				var bank = new ArrayList<Integer>();
+				
+				for (char c : line.toCharArray()) {
+					int joltage = Character.getNumericValue(c);	
+					bank.add(joltage);
+				}
+				
+				m_list.add(bank);
+				System.out.format("bank %02d: %s\n", lineNum, bank);
+			}
+			System.out.format("finished reading %d banks\n\n", lineNum);
+		}
+	}
+	
 
 	/*
 	*/
