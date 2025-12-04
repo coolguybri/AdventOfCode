@@ -390,6 +390,126 @@ public abstract class FileParser {
 
 
 	/*
+    */	
+ 	public static class Sequence {
+		public final long firstId;
+		public final long lastId;
+		
+		public Sequence(long firstId, long lastId) {
+			this.firstId = firstId;
+			this.lastId = lastId;
+		}
+		
+		public long getCount() {
+			return (lastId - firstId) + 1;
+		}
+		
+		public Iterator<Long> getIterator() {
+			return new InternalIterator();
+		}
+
+		@Override
+		public String toString() {
+			return String.format("[%d-%d](%d)", firstId, lastId, getCount());
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			Sequence that = (Sequence) o;
+			return (this.firstId == that.firstId) && (this.lastId == that.lastId);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(firstId, lastId);
+		}
+		
+		private class InternalIterator implements Iterator<Long> {
+        	private long currentId; 
+
+			protected InternalIterator() {
+				currentId = firstId;
+			}
+			
+			@Override
+			public boolean hasNext() {
+				return currentId <= lastId;
+			}
+	
+			@Override
+			public Long next() {
+				if (!hasNext()) {
+					throw new NoSuchElementException();
+				}
+
+				return currentId++;
+			}
+		}
+    }
+     
+    /*
+		11-22,95-115,998-1012,1188511880-1188511890,222220-222224,
+		1698522-1698528,446443-446449,38593856-38593862,565653-565659,
+		824824821-824824827,2121212118-2121212124
+	*/
+	public static class SequenceListParser extends FileParser {
+
+		private ArrayList<Sequence>	list;
+		private int currSequenceId;
+		private Iterator<Long> currIter;
+		
+		public SequenceListParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			list = new ArrayList<Sequence>();
+			currSequenceId = -1;
+			currIter = null;
+		}
+
+		public void parse() throws IOException {
+			int totalIds = 0;
+			for (InternalReaderIterator iter = getFileIterator(); iter.hasNext() ; ) {
+				String line = iter.next();
+				String[] sequenceSpecs = line.split(",");
+				
+				for (String sequenceSpec : sequenceSpecs) {
+					String[] boundaries = sequenceSpec.split("-");
+					long firstId = Long.parseLong(boundaries[0]);
+					long lastId = Long.parseLong(boundaries[1]	);
+					
+					var seq = new Sequence(firstId, lastId);
+					list.add(seq);
+					totalIds += seq.getCount();
+					System.out.format("  importing sequence: %s, totseq=%d, totalids=%d\n", seq.toString(), list.size(), totalIds);
+				}
+			}
+
+			System.out.format("imported total count: %d\n", totalIds);
+		}
+
+		public boolean hasNextId() {
+			// if we are still going throught he current sequence, continue to do so.
+			if ((currIter != null) && currIter.hasNext())
+				return true;
+					
+			// Figure out the next sequence we should read from, looking for the termintating end.
+			currIter = null;
+			currSequenceId++;
+			if (currSequenceId >= list.size())
+				return false;
+				
+			currIter = list.get(currSequenceId).getIterator();
+			return true;
+		}
+		
+		public long getNextId() { 
+			return currIter.next(); 
+		}
+	}
+	
+
+	/*
 	*/
 	public static class LineParser extends FileParser {
 		protected final List<String> m_list;
