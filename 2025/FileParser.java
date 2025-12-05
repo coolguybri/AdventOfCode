@@ -560,7 +560,7 @@ public abstract class FileParser {
 				m_list.add(line);
 				System.out.format("line %02d: %s\n", lineNum, line);
 			}
-			System.out.format("finished reading %d lines\n\n", lineNum);
+			System.out.format("finished reading %d lines\n", lineNum);
 		}
 	}
 	
@@ -569,14 +569,60 @@ public abstract class FileParser {
 	*/
 	public static class MatrixParser extends LineParser {
  
+ 		private int width;
+ 		private int height;
+ 		
 		public MatrixParser(int dayNum, boolean sample) throws IOException {
 			super(dayNum, sample);
 		}
-
-		public char getCell(int x, int y) { return m_list.get(y).charAt(x); }
-		public char getCell(Pos pos) { return getCell(pos.x, pos.y); }
-		public int getHeight() { return m_list.size(); }
-		public int getWidth() { return m_list.get(0).length(); }	
+		
+		public void parse() throws IOException {
+			super.parse();
+			
+			int lineLen = -1;
+			for (var line : m_list) {
+				if (lineLen < 0) {
+					lineLen = line.length();
+				}
+				if (lineLen != line.length()) {
+					throw new IOException("line lengths are not equal");
+				}
+			}
+			
+			width = m_list.get(0).length();
+			height = m_list.size();
+			System.out.format("matrix: %d x %d\n", getWidth(), getHeight());
+		}
+		
+		public int getWidth() { return width; }
+		public int getHeight() { return height; }
+		
+		public char getCell(Pos pos, char defaultValue) { 
+			return getCell(pos.x, pos.y, defaultValue); 
+		}
+		
+		public char getCell(int x, int y, char defaultValue) { 
+			if ((x < 0) || (x >= getWidth()) || (y < 0) || (y >= getHeight())) {
+				//System.out.format("matrix: skipping out of bounds %d,%d\n", x, y);
+				return defaultValue;
+			}
+			
+			return m_list.get(y).charAt(x);
+		}
+		
+		public void setCell(Pos pos, char replaceChar) { 
+			setCell(pos.x, pos.y, replaceChar); 
+		}
+		
+		public void setCell(int x, int y, char replaceChar) { 
+			if ((x < 0) || (x >= getWidth()) || (y < 0) || (y >= getHeight())) {
+				throw new IllegalArgumentException("out of bounds");
+			}
+			
+			StringBuilder sb = new StringBuilder(m_list.get(y));
+			sb.setCharAt(x, replaceChar);
+			m_list.set(y, sb.toString());
+		}
 	}
 }
 
