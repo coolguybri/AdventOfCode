@@ -407,6 +407,30 @@ public abstract class FileParser {
 		public Iterator<Long> getIterator() {
 			return new InternalIterator();
 		}
+		
+		public boolean isIn(long candidate) {
+			return (candidate >= firstId) && (candidate <= lastId);
+		}
+		
+		public Sequence merge(Sequence other) {
+			if (this.firstId <= other.firstId) {
+				if (this.lastId >= other.firstId) {
+					if (this.lastId >= other.lastId)
+						return new Sequence(this.firstId, this.lastId);
+					else
+						return new Sequence(this.firstId, other.lastId);
+				}
+			} else {
+				if (other.lastId >= this.firstId) {
+					if (other.lastId >= this.lastId)
+						return new Sequence(other.firstId, other.lastId);
+					else
+						return new Sequence(other.firstId, this.lastId);
+				}
+			}
+			// no merge possible.
+			return null;
+		}
 
 		@Override
 		public String toString() {
@@ -506,6 +530,65 @@ public abstract class FileParser {
 		public long getNextId() { 
 			return currIter.next(); 
 		}
+	}
+	
+	
+	/*
+		3-5
+		10-14
+		16-20
+		12-18
+		
+		1
+		5
+		8
+		11
+		17
+		32
+	*/
+	public static class SequenceListPlusItemsParser extends FileParser {
+
+		private ArrayList<Sequence>	ranges;
+		private ArrayList<Long> items;
+		
+		public SequenceListPlusItemsParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_skipBlank = false;
+			
+			ranges = new ArrayList<Sequence>();
+			items = new ArrayList<Long>();
+		}
+
+		public void parse() throws IOException {
+			InternalReaderIterator iter;
+			for (iter = getFileIterator(); iter.hasNext() ; ) {
+				String line = iter.next();
+				if (line.length() == 0)
+					break;
+				
+				//System.out.format("  processing line: \"%s\"\n", line);
+				String[] boundaries = line.split("-");	
+				long firstId = Long.parseLong(boundaries[0]);
+				long lastId = Long.parseLong(boundaries[1]);
+				
+				var seq = new Sequence(firstId, lastId);
+				ranges.add(seq);
+				System.out.format("  imported sequence: %s, range-count=%d\n", seq.toString(), ranges.size());
+			}
+
+			System.out.format("imported %d ranges\n", ranges.size());
+			
+			for ( ; iter.hasNext() ; ) {
+				String line = iter.next();
+				long nextId = Long.parseLong(line);
+				
+				items.add(nextId);
+				System.out.format("  imported item: %d, item-count=%d\n", nextId, items.size());
+			}
+		}
+		
+		public ArrayList<Sequence> getRanges() { return ranges; }
+		public ArrayList<Long> getItems() { return items; }
 	}
 	
 	
