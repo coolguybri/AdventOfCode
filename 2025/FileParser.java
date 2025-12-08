@@ -11,6 +11,7 @@ public abstract class FileParser {
 	protected int 					m_lineNum;
 	protected int					m_currPos;
 	protected boolean				m_skipBlank;
+	protected boolean				m_trimLine;
 
 	public FileParser(int dayNum, boolean sample) throws IOException {
 		m_filename = String.format("input/day%02d.%s", dayNum, sample ? "sample" : "input");
@@ -22,6 +23,7 @@ public abstract class FileParser {
 		m_lineNum = 0;
 		m_currPos = 0;
 		m_skipBlank = true;
+		m_trimLine = true;
 	}
 
 	public InternalReaderIterator getFileIterator() {
@@ -53,7 +55,10 @@ public abstract class FileParser {
 
 				m_lineNum++;
 				m_currPos = 0;
-				m_line = m_line.trim();
+				
+				if (m_trimLine) {
+					m_line = m_line.trim();
+				}
 
 				// Skip blank lines.
 				if (!m_skipBlank || (m_line.length() > 0)) {
@@ -705,6 +710,205 @@ public abstract class FileParser {
 			StringBuilder sb = new StringBuilder(m_list.get(y));
 			sb.setCharAt(x, replaceChar);
 			m_list.set(y, sb.toString());
+		}
+	}
+	
+	
+	
+	/*
+	*/
+	public static class MathProblemParser extends LineParser {
+
+ 		ArrayList<Character> operators;
+ 		
+		public MathProblemParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			m_trimLine = false;
+		}
+		
+		private void parseOperators() throws IOException {
+			// suck up the operators and convert to a list of chars.
+			int linecount = m_list.size();
+			String operatorLine = m_list.remove(linecount - 1);
+	
+			String[] operatorsArray = operatorLine.trim().split("\\s+"); // regex for 1 to many whitespace chars
+			operators = new ArrayList<>();
+			for (String operator : operatorsArray) {
+				 operators.add(operator.charAt(0));
+			}
+			System.out.format("mathproblems: operators: %s\n", operators);
+		}
+		
+		public void parse() throws IOException {
+			super.parse();
+			parseOperators();
+			
+			// suck up all the operands and convert to lists of longs.
+			var operandsListList = new ArrayList<ArrayList<Long>>();
+			int linecount = m_list.size();
+			for (int l = 0 ; l < linecount ; l++) {
+				String operandsLine = m_list.get(l);
+				var operandsList =  new ArrayList<Long>();
+
+				String[] operandsArray = operandsLine.trim().split("\\s+");
+				for (String operand : operandsArray) {
+				 	operandsList.add(Long.parseLong(operand));
+				}
+				operandsListList.add(operandsList);
+				System.out.format("mathproblems: operands (%02d): %s\n", l, operandsList);
+			}
+			
+			// perform the math.
+			long grandTotal = 0;
+			for (var operator : operators) {
+				switch (operator) {
+				case '+':
+					{
+						System.out.format("* hit add operation\n");
+
+						long sum = 0;
+						for (var operandsList : operandsListList) {
+							long operand = operandsList.remove(0);
+							sum += operand;
+							System.out.format(" operand=%d, sum=%d\n", operand, sum);
+						}
+						
+						grandTotal += sum;
+						System.out.format("* hit add sum=%d, grandTotal=%d\n", sum, grandTotal);
+					}
+					break;
+					
+				case '*':
+					{
+						System.out.format("* hit multiply operation\n");
+					
+						long product = 1;
+						for (var operandsList : operandsListList) {
+							long operand = operandsList.remove(0);
+							product *= operand;
+							System.out.format(" operand=%d, product=%d\n", operand, product);
+						}
+						
+						grandTotal += product;
+						System.out.format("* hit add product=%d, grandTotal=%d\n", product, grandTotal);
+					}
+					break;
+				}
+			}
+		}
+		
+		private char getCharAt(int lineNo, int colNo) {
+			if ((lineNo < 0) || (lineNo >= m_list.size()))
+				return ' ';
+			String line = m_list.get(lineNo);
+			if ((colNo < 0) || (colNo >= line.length()))
+				return ' ';
+			return line.charAt(colNo);
+		}
+			
+		protected Accumulator createAccumulator(char operator) throws IOException {
+			switch (operator) {
+			case '+':
+				return new AddAccumulator();	
+			case '*':
+				return new MultiplyAccumulator();
+			default:
+				throw new IOException("illegal operator");
+			}
+		}
+			
+		protected interface Accumulator {
+			long accumulate(long operand);
+			long getResult();
+		}
+		
+		protected class AddAccumulator implements Accumulator {
+			private long sum = 0;
+			
+			public long accumulate(long operand) {
+				sum += operand;
+				return sum;
+			}
+
+			public long getResult() {
+				return sum;
+			}
+		}
+		
+		protected  class MultiplyAccumulator implements Accumulator {
+			private long product = 1;
+			
+			public long accumulate(long operand) {
+				product *= operand;
+				return product;
+			}
+
+			public long getResult() {
+				return product;
+			}
+		}
+			
+		public void parsePart2() throws IOException {
+			super.parse();
+			parseOperators();
+				
+			// compute max line len.
+			int maxLineLen = 0;
+			int numLines = 0;
+			for (var line : m_list) {
+				numLines++;
+				int lineLen = line.length();
+				if (lineLen > maxLineLen) 
+					maxLineLen = lineLen;
+			}
+			System.out.format(" parsing, numLines=%d, maxLineLen=%d\n", numLines, maxLineLen);
+
+			long grandTotal = 0;
+			
+			// Get current operator.
+			char operator = operators.remove(0);
+			Accumulator accum = createAccumulator(operator);
+			
+			for (int parsePos = 0; parsePos < maxLineLen ; parsePos++) {
+				boolean allClearColumn = true;
+				StringBuffer sb = new StringBuffer();
+				
+				for (int q = 0 ; q < numLines ; q++) {
+					char c = getCharAt(q, parsePos);
+					sb.append(c);
+
+					allClearColumn &= (c == ' ');
+					System.out.format(" parsing, read %c from line %d, pos %d, buf=%s, allclear=%b\n", c, q, parsePos, sb.toString(), allClearColumn);
+				}
+				
+				if (!allClearColumn) {
+					long operand = Long.parseLong(sb.toString().trim());
+					System.out.format("  parsed operand: %d\n", operand);
+					
+					long total = accum.accumulate(operand);
+					System.out.format(" accumulating, %d tot=%d\n", operand, total);
+				} else {
+					grandTotal += accum.getResult();
+					accum = null;
+					
+					if (operators.isEmpty()) {
+						System.out.format(" end of accumulation\n");
+						break;
+					}
+
+					operator = operators.remove(0);
+					accum = createAccumulator(operator);
+				}
+			}
+			
+			if (accum != null) {
+				grandTotal += accum.getResult();
+				accum = null;
+			}
+			
+			System.out.format("grand total is %d\n", grandTotal);
+
+			
 		}
 	}
 }
