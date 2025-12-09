@@ -907,8 +907,6 @@ public abstract class FileParser {
 			}
 			
 			System.out.format("grand total is %d\n", grandTotal);
-
-			
 		}
 	}
 }
