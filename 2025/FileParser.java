@@ -321,6 +321,98 @@ public abstract class FileParser {
 	
 	/*
     */	
+ 	public static class Pos3 {
+		public final int x;
+		public final int y;
+		public final int z;
+		
+		public Pos3(int x, int y, int z) {
+			this.x = x;
+			this.y = y;
+			this.z = z;
+		}
+
+		@Override
+		public String toString() {
+			return String.format("(%d,%d,%d)", x, y, z);
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			Pos3	 that = (Pos3) o;
+			return (this.x == that.x) && (this.y == that.y) && (this.z == that.z);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(x, y, z);
+		}
+
+		public Pos3 left() {
+			return new Pos3(x-1, y, z);
+		}
+		public Pos3 right() {
+			return new Pos3(x+1, y, z);
+		}
+		public Pos3 up() {
+			return new Pos3(x, y-1, z);
+		}
+		public Pos3 down() {
+			return new Pos3(x, y+1, z);
+        }
+		public Pos3 add(Pos3 adder) {
+			return new Pos3(adder.x + this.x, adder.y + this.y, adder.z + this.z);
+		}
+		
+		public double getDistance(Pos3 other){
+			long deltaX = this.x - other.x;
+			long deltaY = this.y - other.y;
+			long deltaZ = this.z - other.z;
+			
+			long product = (deltaX * deltaX) + (deltaY * deltaY) + (deltaZ * deltaZ);
+			double result = Math.sqrt(product);
+			return result;
+		}
+     }
+     
+     
+
+	/*
+		162,817,812
+		57,618,57
+		906,360,560
+		592,479,940
+	*/
+	public static class Pos3Parser extends FileParser {
+
+		private ArrayList<Pos3>	list;
+		
+		public Pos3Parser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			list = new ArrayList<Pos3>();
+		}
+
+		public void parse() throws IOException {
+			for (InternalReaderIterator iter = getFileIterator(); iter.hasNext() ; ) {
+				String line = iter.next();
+				StringTokenizer st = new StringTokenizer(line, ",");
+				int x = Integer.parseInt(st.nextToken());
+				int y = Integer.parseInt(st.nextToken());
+				int z = Integer.parseInt(st.nextToken());
+				list.add(new Pos3(x, y, z));
+			}
+
+			System.out.format("imported: %s)\n", list);
+		}
+
+		public List<Pos3> getList() { return list; }
+	}
+	
+	
+	/*
+    */	
  	public static class Rotation {
 		public final boolean directionIsLeft;
 		public final int clickCount;
@@ -712,7 +804,6 @@ public abstract class FileParser {
 			m_list.set(y, sb.toString());
 		}
 	}
-	
 	
 	
 	/*
