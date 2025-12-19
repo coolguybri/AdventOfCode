@@ -1000,6 +1000,125 @@ public abstract class FileParser {
 			System.out.format("grand total is %d\n", grandTotal);
 		}
 	}
+	
+	
+	protected class Button {
+		private static long nextButtonId = 0;
+
+		public final long			id;
+		public final List<Integer> 	lights;
+		
+		public Button(List<Integer> lights) {
+			this.id = nextButtonId++;
+			this.lights = lights;
+		}
+		
+		@Override
+		public String toString() {
+			return String.format("[btn %02d %s]", id, lights);
+		}
+	}
+	
+	protected class Machine {
+		private static long nextMachineId = 0;
+		
+		public final long			id;
+		public final int			desiredBits;
+		public final int			desiredBitsLen;
+		public final int 			desiredJoltageLen;
+		public final int[]			desiredJoltageTarget;
+		public final List<Button>	buttons;
+		
+		public Machine(List<Button> buttons, int desiredBitsLen, int desiredBits, int desiredJoltageLen, int[] desiredJoltageTarget) {
+			this.id = nextMachineId++;
+			this.buttons = buttons;
+			this.desiredBits = desiredBits;
+			this.desiredBitsLen = desiredBitsLen;
+			this.desiredJoltageLen = desiredJoltageLen;
+			this.desiredJoltageTarget = desiredJoltageTarget;
+		}
+		
+		@Override
+		public String toString() {
+			return String.format("[machine %02d: desire=(%d)%s, joltTarg=(%d)%s, butts=%s]", 
+				id, desiredBitsLen, Integer.toBinaryString(desiredBits), 
+				desiredJoltageLen, Arrays.toString(desiredJoltageTarget), buttons);
+		}
+	}
+	
+	/*
+	*/
+	public static class MachineListParser extends LineParser {
+		
+ 		private ArrayList<Machine> machines;
+ 		
+		public MachineListParser(int dayNum, boolean sample) throws IOException {
+			super(dayNum, sample);
+			machines = new ArrayList<Machine>();
+		}
+		
+		public List<Machine> getMachines() {
+			return machines;
+		}
+		
+		public void parse() throws IOException {
+			super.parse();
+			
+			int linecount = m_list.size();
+			for (int l = 0 ; l < linecount ; l++) {
+				String machineLine = m_list.get(l);
+				
+				// Split into chunks separated by spaces, and remove the first and last chunks for the light diagram
+				// and the joltage requirements; the rest in the middle are all button specs.
+				List<String> machineChunks = new ArrayList<String>(Arrays.asList(machineLine.trim().split(" ")));
+				String desiredLightStateString = machineChunks.remove(0);
+				String joltageRequirementsString = machineChunks.remove(machineChunks.size() - 1);
+				
+				int desiredLightBits = 0;
+				desiredLightStateString = desiredLightStateString.substring(1, desiredLightStateString.length() - 1);
+				//	System.out.format("  processing lightstate 2: %s\n", desiredLightStateString);
+
+				for (int cPos = 0 ; cPos < desiredLightStateString.length() ; cPos++) {
+					char c = desiredLightStateString.charAt(cPos);
+					switch (c) {
+					case '.':
+						//desiredLightBits = desiredLightBits | (1 << cPos);
+						break;
+						
+					case '#':
+						desiredLightBits = desiredLightBits | (1 << cPos);
+						break;
+						
+					default:
+						throw new IOException("bad char in light state");
+					}
+				}
+				
+				
+				joltageRequirementsString = joltageRequirementsString.substring(1, joltageRequirementsString.length() - 1);
+				var joltageRequirementTargetPre = joltageRequirementsString.trim().split(",");
+				var joltageRequirementTarget = new int[joltageRequirementTargetPre.length];
+				for (int i = 0 ; i < joltageRequirementTargetPre.length ; i++) {
+					joltageRequirementTarget[i] = Integer.parseInt(joltageRequirementTargetPre[i]);
+				}
+				//System.out.format("  processing joltageRequirements: %s\n", Arrays.toString(joltageRequirementTarget));
+	
+				List<Button> connectedButtons = new ArrayList<Button>();
+				for (var buttonSpec : machineChunks) {
+					// Get rid of parenthesis and then split it up based on the comma.
+					buttonSpec = buttonSpec.substring(1, buttonSpec.length() - 1);
+					List<String> lightIds = new ArrayList<String>(Arrays.asList(buttonSpec.trim().split(",")));
+					List<Integer> lightNums = new ArrayList<Integer>();
+					for (var lightId : lightIds) {
+						lightNums.add(Integer.parseInt(lightId));
+					}
+					connectedButtons.add(new Button(lightNums));
+				}
+				
+				var machine = new Machine(connectedButtons, desiredLightStateString.length(), desiredLightBits, joltageRequirementTarget.length, joltageRequirementTarget);
+				machines.add(machine);
+				System.out.format("import machine: %s\n", machine);
+			}
+		}
+	}
 }
-
-
